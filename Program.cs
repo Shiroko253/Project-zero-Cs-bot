@@ -2,17 +2,17 @@
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
-using dotenv.net;  // ✅ 正確引入 dotenv.net
+using dotenv.net;
 
 class Program
 {
-    private DiscordSocketClient? _client; // ✅ 允許 null 以解決警告
+    private DiscordSocketClient? _client;
 
     static async Task Main(string[] args) => await new Program().RunBotAsync();
 
     public async Task RunBotAsync()
     {
-        DotEnv.Load(); // ✅ 正確載入 .env 檔案
+        DotEnv.Load();
         string botToken = Environment.GetEnvironmentVariable("MIAN_BOT_TOKEN");
 
         if (string.IsNullOrEmpty(botToken))
