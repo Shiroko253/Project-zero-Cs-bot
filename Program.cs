@@ -1,8 +1,10 @@
-﻿using System;
+using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
 using dotenv.net;
+using Discord.Interactions;
 
 class Program
 {
@@ -17,17 +19,31 @@ class Program
 
         if (string.IsNullOrEmpty(botToken))
         {
-            Console.WriteLine("❌ 錯誤：未找到 DISCORD_BOT_TOKEN，請檢查 .env 文件！");
+            Console.WriteLine("❌ 錯誤：未找到 MIAN_BOT_TOKEN，請檢查 .env 文件！");
             return;
         }
 
-        _client = new DiscordSocketClient(new DiscordSocketConfig()
+        var config = new DiscordSocketConfig()
         {
-            GatewayIntents = GatewayIntents.Guilds | GatewayIntents.GuildMessages | GatewayIntents.MessageContent
-        });
+            GatewayIntents = GatewayIntents.Guilds
+        };
 
+        _client = new DiscordSocketClient(config);
         _client.Log += LogAsync;
-        _client.MessageReceived += HandleCommandAsync;
+
+        var commandService = new InteractionService(_client);
+        _client.InteractionCreated += async interaction =>
+        {
+            var ctx = new SocketInteractionContext(_client, interaction);
+            await commandService.ExecuteCommandAsync(ctx, null);
+        };
+
+        _client.Ready += async () =>
+        {
+            await RegisterCommands();
+        };
+
+        _client.SlashCommandExecuted += HandleSlashCommandAsync;
 
         await _client.LoginAsync(TokenType.Bot, botToken);
         await _client.StartAsync();
@@ -41,20 +57,45 @@ class Program
         return Task.CompletedTask;
     }
 
-    private async Task HandleCommandAsync(SocketMessage message)
+    private async Task RegisterCommands()
     {
-        if (message.Author.IsBot) return;
-
-        string msg = message.Content.ToLower();
-
-        if (msg == "!ping")
+        foreach (var guild in _client.Guilds)
         {
-            await message.Channel.SendMessageAsync("Pong!");
+            var pingCommand = new SlashCommandBuilder()
+                .WithName("ping")
+                .WithDescription("測試機器人是否在線");
+
+            var echoCommand = new SlashCommandBuilder()
+                .WithName("echo")
+                .WithDescription("回覆你輸入的文字")
+                .AddOption("text", ApplicationCommandOptionType.String, "要回覆的文字", isRequired: true);
+
+            try
+            {
+                await guild.CreateApplicationCommandAsync(pingCommand.Build());
+                await guild.CreateApplicationCommandAsync(echoCommand.Build());
+                Console.WriteLine($"✅ 斜線指令已在伺服器 {guild.Name} 註冊！");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ 註冊指令到 {guild.Name} 時出錯：{ex.Message}");
+            }
         }
-        else if (msg.StartsWith("!echo "))
+    }
+
+    private async Task HandleSlashCommandAsync(SocketSlashCommand command)
+    {
+        switch (command.Data.Name)
         {
-            string text = message.Content.Substring(6);
-            await message.Channel.SendMessageAsync(text);
+            case "ping":
+                int latency = _client.Latency;
+                await command.RespondAsync($"🏓 Pong! 當前機器人與discord api的延遲: {latency}ms", ephemeral: false);
+                break;
+
+            case "echo":
+                string text = command.Data.Options.First().Value.ToString();
+                await command.RespondAsync(text, ephemeral: false);
+                break;
         }
     }
 }
