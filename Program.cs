@@ -13,14 +13,14 @@ class Program
     static async Task Main(string[] args) => await new Program().RunBotAsync();
 
     public async Task RunBotAsync()
-    {   // ↓ fix here a provlems
-        DotEnv.Load(); // Converting null literal or possible null value to non-nullable type.
-           // ↓ missing the "?"
-        string? botToken = Environment.GetEnvironmentVariable("MIAN_BOT_TOKEN"); 
-
-        if (string.IsNullOrEmpty(botToken))
+    {
+        DotEnv.Load(); 
+        // ↓ Fix the problem ~~← "Peovleom"~~ here 
+        string? botToken = Environment.GetEnvironmentVariable("MIAN_BOT_TOKEN"); // ← Converting null literal or possible null value to non-nullable type.
+           // ↑ just missing the "?"
+        if (string.IsNullOrEmpty(botToken))  // ← This part is great, no issues
         {
-            Console.WriteLine("❌ 錯誤：未找到 MIAN_BOT_TOKEN，請檢查 .env 文件！");  // here is gread not any problems
+            Console.WriteLine("❌ 錯誤：未找到 MIAN_BOT_TOKEN，請檢查 .env 文件！");
             return;
         }
 
@@ -59,15 +59,14 @@ class Program
     }
 
     private async Task RegisterCommands()
-    { // ↓ dereference of a possibly null reference. ↓
-        if (_client == null) 
+    {       // ↓ dereference of a possibly null reference.
+        if (_client == null)
         {
             Console.WriteLine("❌ 錯誤：DiscordSocketClient 未初始化！");
             return;
-        }
-       
+        } // ↑ There was a bug, but I fixed it ↑
+        
         foreach (var guild in _client.Guilds)
-        // ↑ there is bug but i fix it
         {
             var pingCommand = new SlashCommandBuilder()
                 .WithName("ping")
@@ -120,15 +119,16 @@ class Program
                 break;
             // ↓ here is big problems but is ok...
             case "echo":
-                if (command.Data.Options.Count == 0 || command.Data.Options.First().Value == null) // ← Concentrating null literal or possible null value to non-nullable 
+                if (command.Data.Options.Count == 0 || command.Data.Options.First().Value == null) // ← Converting null literal or possible null value to non-nullable.
                 {
-                    await command.RespondAsync("❌ 錯誤：請提供有效的輸入！", ephemeral: true);
+                    await command.RespondAsync("❌ 錯誤：請提供有效的輸入！", ephemeral: true); // ← Looks like a new addition, but it's not explained clearly.
                     return;
                 }
 
-                string text = command.Data.Options.First().Value?.ToString() ?? "（無內容）";
-                await command.RespondAsync(text, ephemeral: false);
-                break; // ← do't forge this "break;"
+                string text = command.Data.Options.First().Value?.ToString() ?? "（無內容）";  // ← Here too
+                await command.RespondAsync(text, ephemeral: false); // ← Here too but that is use await so what i can say
+                break; // ← Don't forget this 'break;'
+                          //  ↑ Do't forge this 'break;'
 
             case "shutdown":
                 if (command.User.Id == authorId)
