@@ -15,7 +15,7 @@ class Program
     public async Task RunBotAsync()
     {
         DotEnv.Load();
-        string botToken = Environment.GetEnvironmentVariable("MIAN_BOT_TOKEN");
+        string? botToken = Environment.GetEnvironmentVariable("MIAN_BOT_TOKEN");
 
         if (string.IsNullOrEmpty(botToken))
         {
@@ -59,7 +59,14 @@ class Program
 
     private async Task RegisterCommands()
     {
+        if (_client == null)
+        {
+            Console.WriteLine("❌ 錯誤：DiscordSocketClient 未初始化！");
+            return;
+        }
+
         foreach (var guild in _client.Guilds)
+
         {
             var pingCommand = new SlashCommandBuilder()
                 .WithName("ping")
@@ -70,10 +77,21 @@ class Program
                 .WithDescription("回覆你輸入的文字")
                 .AddOption("text", ApplicationCommandOptionType.String, "要回覆的文字", isRequired: true);
 
+            var shutdownCommand = new SlashCommandBuilder()
+                .WithName("shutdown")
+                .WithDescription("關閉機器人");
+
+            var restartCommand = new SlashCommandBuilder()
+                .WithName("restart")
+                .WithDescription("重新啟動機器人");
+
             try
             {
                 await guild.CreateApplicationCommandAsync(pingCommand.Build());
                 await guild.CreateApplicationCommandAsync(echoCommand.Build());
+                await guild.CreateApplicationCommandAsync(shutdownCommand.Build());
+                await guild.CreateApplicationCommandAsync(restartCommand.Build());
+
                 Console.WriteLine($"✅ 斜線指令已在伺服器 {guild.Name} 註冊！");
             }
             catch (Exception ex)
@@ -85,16 +103,55 @@ class Program
 
     private async Task HandleSlashCommandAsync(SocketSlashCommand command)
     {
+        string? authorIdStr = Environment.GetEnvironmentVariable("AUTHOR_ID");
+        if (string.IsNullOrEmpty(authorIdStr))
+        {
+            await command.RespondAsync("❌ 錯誤：未找到 AUTHOR_ID，請檢查 .env 文件！", ephemeral: true);
+            return;
+        }
+        ulong authorId = ulong.Parse(authorIdStr);
+
         switch (command.Data.Name)
         {
             case "ping":
-                int latency = _client.Latency;
+                int latency = _client!.Latency;
                 await command.RespondAsync($"🏓 Pong! 當前機器人與discord api的延遲: {latency}ms", ephemeral: false);
                 break;
 
             case "echo":
-                string text = command.Data.Options.First().Value.ToString();
+                if (command.Data.Options.Count == 0 || command.Data.Options.First().Value == null)
+                {
+                    await command.RespondAsync("❌ 錯誤：請提供有效的輸入！", ephemeral: true);
+                    return;
+                }
+
+                string text = command.Data.Options.First().Value?.ToString() ?? "（無內容）";
                 await command.RespondAsync(text, ephemeral: false);
+                break;
+
+            case "shutdown":
+                if (command.User.Id == authorId)
+                {
+                    await command.RespondAsync("\U0001f6d1 機器人即將關閉...", ephemeral: true);
+                    Environment.Exit(0);
+                }
+                else
+                {
+                    await command.RespondAsync("❌ 你沒有權限關閉機器人！", ephemeral: true);
+                }
+                break;
+
+            case "restart":
+                if (command.User.Id == authorId)
+                {
+                    await command.RespondAsync("🔄 機器人即將重新啟動...", ephemeral: true);
+                    System.Diagnostics.Process.Start("dotnet", "run");
+                    Environment.Exit(0);
+                }
+                else
+                {
+                    await command.RespondAsync("❌ 你沒有權限重新啟動機器人！", ephemeral: true);
+                }
                 break;
         }
     }
