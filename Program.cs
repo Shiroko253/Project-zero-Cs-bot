@@ -13,13 +13,14 @@ class Program
     static async Task Main(string[] args) => await new Program().RunBotAsync();
 
     public async Task RunBotAsync()
-    {
-        DotEnv.Load();
-        string? botToken = Environment.GetEnvironmentVariable("MIAN_BOT_TOKEN");
+    {   // ↓ fix here a provlems
+        DotEnv.Load(); // Converting null literal or possible null value to non-nullable type.
+           // ↓ missing the "?"
+        string? botToken = Environment.GetEnvironmentVariable("MIAN_BOT_TOKEN"); 
 
         if (string.IsNullOrEmpty(botToken))
         {
-            Console.WriteLine("❌ 錯誤：未找到 MIAN_BOT_TOKEN，請檢查 .env 文件！");
+            Console.WriteLine("❌ 錯誤：未找到 MIAN_BOT_TOKEN，請檢查 .env 文件！");  // here is gread not any problems
             return;
         }
 
@@ -58,15 +59,15 @@ class Program
     }
 
     private async Task RegisterCommands()
-    {
-        if (_client == null)
+    { // ↓ dereference of a possibly null reference. ↓
+        if (_client == null) 
         {
             Console.WriteLine("❌ 錯誤：DiscordSocketClient 未初始化！");
             return;
         }
-
+       
         foreach (var guild in _client.Guilds)
-
+        // ↑ there is bug but i fix it
         {
             var pingCommand = new SlashCommandBuilder()
                 .WithName("ping")
@@ -117,9 +118,9 @@ class Program
                 int latency = _client!.Latency;
                 await command.RespondAsync($"🏓 Pong! 當前機器人與discord api的延遲: {latency}ms", ephemeral: false);
                 break;
-
+            // ↓ here is big problems but is ok...
             case "echo":
-                if (command.Data.Options.Count == 0 || command.Data.Options.First().Value == null)
+                if (command.Data.Options.Count == 0 || command.Data.Options.First().Value == null) // ← Concentrating null literal or possible null value to non-nullable 
                 {
                     await command.RespondAsync("❌ 錯誤：請提供有效的輸入！", ephemeral: true);
                     return;
@@ -127,7 +128,7 @@ class Program
 
                 string text = command.Data.Options.First().Value?.ToString() ?? "（無內容）";
                 await command.RespondAsync(text, ephemeral: false);
-                break;
+                break; // ← do't forge this "break;"
 
             case "shutdown":
                 if (command.User.Id == authorId)
