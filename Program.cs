@@ -14,13 +14,12 @@ class Program
 
     public async Task RunBotAsync()
     {
-        DotEnv.Load(); 
-        // ↓ Fix the problem ~~← "Peovleom"~~ here 
-        string? botToken = Environment.GetEnvironmentVariable("MIAN_BOT_TOKEN"); // ← Converting null literal or possible null value to non-nullable type.
-           // ↑ just missing the "?"
-        if (string.IsNullOrEmpty(botToken))  // ← This part is great, no issues
+        DotEnv.Load();
+        string? botToken = Environment.GetEnvironmentVariable("MIAN_BOT_TOKEN");
+
+        if (string.IsNullOrEmpty(botToken))
         {
-            Console.WriteLine("❌ 錯誤：未找到 MIAN_BOT_TOKEN，請檢查 .env 文件！");
+            Console.WriteLine("❌ Error: MIAN_BOT_TOKEN not found. Please check your .env file!");
             return;
         }
 
@@ -41,7 +40,24 @@ class Program
 
         _client.Ready += async () =>
         {
-            await RegisterCommands();
+            Console.WriteLine("✅ Bot is ready!");
+
+            await _client.SetStatusAsync(UserStatus.Idle);
+
+            await _client.SetGameAsync("幽幽子大人", null, ActivityType.Watching);
+
+            await ClearPreviousCommands();
+
+            foreach (var guild in _client.Guilds)
+            {
+                await RegisterCommandsForGuild(guild.Id);
+            }
+        };
+
+        _client.GuildAvailable += async guild =>
+        {
+            Console.WriteLine($"📢 Bot is now available in: {guild.Name}");
+            await RegisterCommandsForGuild(guild.Id);
         };
 
         _client.SlashCommandExecuted += HandleSlashCommandAsync;
@@ -58,46 +74,70 @@ class Program
         return Task.CompletedTask;
     }
 
-    private async Task RegisterCommands()
-    {       // ↓ dereference of a possibly null reference.
+    private async Task ClearPreviousCommands()
+    {
         if (_client == null)
         {
-            Console.WriteLine("❌ 錯誤：DiscordSocketClient 未初始化！");
+            Console.WriteLine("❌ Error: DiscordSocketClient is not initialized!");
             return;
-        } // ↑ There was a bug, but I fixed it ↑
-        
-        foreach (var guild in _client.Guilds)
+        }
+
+        try
         {
-            var pingCommand = new SlashCommandBuilder()
-                .WithName("ping")
-                .WithDescription("測試機器人是否在線");
+            await _client.BulkOverwriteGlobalApplicationCommandsAsync(Array.Empty<ApplicationCommandProperties>());
+            Console.WriteLine("✅ Cleared all global slash commands!");
 
-            var echoCommand = new SlashCommandBuilder()
-                .WithName("echo")
-                .WithDescription("回覆你輸入的文字")
-                .AddOption("text", ApplicationCommandOptionType.String, "要回覆的文字", isRequired: true);
-
-            var shutdownCommand = new SlashCommandBuilder()
-                .WithName("shutdown")
-                .WithDescription("關閉機器人");
-
-            var restartCommand = new SlashCommandBuilder()
-                .WithName("restart")
-                .WithDescription("重新啟動機器人");
-
-            try
+            foreach (var guild in _client.Guilds)
             {
-                await guild.CreateApplicationCommandAsync(pingCommand.Build());
-                await guild.CreateApplicationCommandAsync(echoCommand.Build());
-                await guild.CreateApplicationCommandAsync(shutdownCommand.Build());
-                await guild.CreateApplicationCommandAsync(restartCommand.Build());
+                await guild.BulkOverwriteApplicationCommandAsync(Array.Empty<ApplicationCommandProperties>());
+                Console.WriteLine($"✅ Cleared all guild commands for {guild.Name}!");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error while clearing commands: {ex.Message}");
+        }
+    }
 
-                Console.WriteLine($"✅ 斜線指令已在伺服器 {guild.Name} 註冊！");
-            }
-            catch (Exception ex)
+    private async Task RegisterCommandsForGuild(ulong guildId)
+    {
+        var guild = _client!.GetGuild(guildId);
+        if (guild == null) return;
+
+        var pingCommand = new SlashCommandBuilder()
+            .WithName("ping")
+            .WithDescription("測試機器人是否在線");
+
+        var echoCommand = new SlashCommandBuilder()
+            .WithName("echo")
+            .WithDescription("回覆你提供的文字")
+            .AddOption("text", ApplicationCommandOptionType.String, "要回覆的文字", isRequired: true);
+
+        var shutdownCommand = new SlashCommandBuilder()
+            .WithName("shutdown")
+            .WithDescription("關閉機器人");
+
+        var restartCommand = new SlashCommandBuilder()
+            .WithName("restart")
+            .WithDescription("重新啟動機器人");
+
+        try
+        {
+            var commands = new ApplicationCommandProperties[]
             {
-                Console.WriteLine($"❌ 註冊指令到 {guild.Name} 時出錯：{ex.Message}");
-            }
+                pingCommand.Build(),
+                echoCommand.Build(),
+                shutdownCommand.Build(),
+                restartCommand.Build()
+            };
+
+            await guild.BulkOverwriteApplicationCommandAsync(commands);
+
+            Console.WriteLine($"✅ Synchronized slash commands to guild {guild.Name}!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error registering commands to {guild.Name}: {ex.Message}");
         }
     }
 
@@ -106,7 +146,7 @@ class Program
         string? authorIdStr = Environment.GetEnvironmentVariable("AUTHOR_ID");
         if (string.IsNullOrEmpty(authorIdStr))
         {
-            await command.RespondAsync("❌ 錯誤：未找到 AUTHOR_ID，請檢查 .env 文件！", ephemeral: true);
+            await command.RespondAsync("❌ Error: AUTHOR_ID not found. Please check your .env file!", ephemeral: true);
             return;
         }
         ulong authorId = ulong.Parse(authorIdStr);
@@ -115,25 +155,24 @@ class Program
         {
             case "ping":
                 int latency = _client!.Latency;
-                await command.RespondAsync($"🏓 Pong! 當前機器人與discord api的延遲: {latency}ms", ephemeral: false);
+                await command.RespondAsync($"🏓 Pong！目前與 Discord API 的延遲為：{latency}ms", ephemeral: false);
                 break;
-            // ↓ here is big problems but is ok...
+
             case "echo":
-                if (command.Data.Options.Count == 0 || command.Data.Options.First().Value == null) // ← Converting null literal or possible null value to non-nullable.
+                if (command.Data.Options.Count == 0 || command.Data.Options.First().Value == null)
                 {
-                    await command.RespondAsync("❌ 錯誤：請提供有效的輸入！", ephemeral: true); // ← Looks like a new addition, but it's not explained clearly.
+                    await command.RespondAsync("❌ 錯誤: 請提供有效的輸入！", ephemeral: true);
                     return;
                 }
 
-                string text = command.Data.Options.First().Value?.ToString() ?? "（無內容）";  // ← Here too
-                await command.RespondAsync(text, ephemeral: false); // ← Here too but that is use await so what i can say
-                break; // ← Don't forget this 'break;'
-                          //  ↑ Do't forge this 'break;'
+                string text = command.Data.Options.First().Value?.ToString() ?? "(無內容)";
+                await command.RespondAsync(text, ephemeral: false);
+                break;
 
             case "shutdown":
                 if (command.User.Id == authorId)
                 {
-                    await command.RespondAsync("\U0001f6d1 機器人即將關閉...", ephemeral: true);
+                    await command.RespondAsync("⛔ 機器人即將關閉...", ephemeral: true);
                     Environment.Exit(0);
                 }
                 else
@@ -145,7 +184,7 @@ class Program
             case "restart":
                 if (command.User.Id == authorId)
                 {
-                    await command.RespondAsync("🔄 機器人即將重新啟動...", ephemeral: true);
+                    await command.RespondAsync("🔄 機器人正在重新啟動...", ephemeral: true);
                     System.Diagnostics.Process.Start("dotnet", "run");
                     Environment.Exit(0);
                 }
